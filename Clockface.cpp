@@ -6,17 +6,17 @@ EventBus eventBus;
 const char* FORMAT_TWO_DIGITS = "%02d";
 
 // Graphical elements
-Tile ground(GROUND, 8, 8); 
+Tile ground(GROUND, 8, 8); // 地面
 
-Object bush(BUSH, 21, 9);
-Object cloud1(CLOUD1, 13, 12);
-Object cloud2(CLOUD2, 13, 12);
-Object hill(HILL, 20, 22);
+Object bush(BUSH, 21, 9); // 灌木丛
+Object cloud1(CLOUD1, 13, 12); // 云朵1
+Object cloud2(CLOUD2, 13, 12); // 云朵2
+Object hill(HILL, 20, 22); //小山
 
 
-Mario mario(23, 40);
-Block hourBlock(13, 8);
-Block minuteBlock(32, 8);
+Mario mario(23, 40); // 马里奥
+Block hourBlock(13, 8); // 小时砖块
+Block minuteBlock(32, 8); // 分钟砖块
 
 unsigned long lastMillis = 0;
 
@@ -54,7 +54,7 @@ void Clockface::update() {
   mario.update();
 
   if (_dateTime->getSecond() == 0 && millis() - lastMillis > 1000) {
-    mario.jump();
+    mario.jump(false);
     updateTime();
     lastMillis = millis();
 
@@ -69,7 +69,7 @@ void Clockface::updateTime() {
 
 void Clockface::externalEvent(int type) {
   if (type == 0) {  //TODO create an enum
-    mario.jump();
+    mario.jump(true);
     updateTime();
   }
 }
