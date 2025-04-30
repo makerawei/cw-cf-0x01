@@ -54,7 +54,7 @@ void Clockface::update() {
   mario.update();
 
   if (_dateTime->getSecond() == 0 && millis() - lastMillis > 1000) {
-    mario.jump(false);
+    mario.jump();
     updateTime();
     lastMillis = millis();
 
@@ -67,9 +67,11 @@ void Clockface::updateTime() {
   minuteBlock.setText(String(_dateTime->getMinute(FORMAT_TWO_DIGITS)));
 }
 
-void Clockface::externalEvent(int type) {
+bool Clockface::externalEvent(int type) {
   if (type == 0) {  //TODO create an enum
-    mario.jump(true);
     updateTime();
+    return mario.jump();
   }
+
+  return false;
 }

@@ -1,5 +1,4 @@
 #include "mario.h"
-#include <AudioHelper.h>
 
 Mario::Mario(int x, int y) {
   _x = x;
@@ -16,10 +15,10 @@ void Mario::move(Direction dir, int times) {
 
 }
 
-void Mario::jump(bool music) {
-  if (_state != JUMPING && (millis() - lastMillis > 500) ) {
+bool Mario::jump() {
+  bool canJump = _state != JUMPING && (millis() - lastMillis > 500);
+  if (canJump) {
     // Serial.println("Jump - Start");
-
     _lastState = _state;
     _state = JUMPING;
 
@@ -33,19 +32,9 @@ void Mario::jump(bool music) {
 
     _lastY = _y;
     _lastX = _x;
-    
-    if(music) {
-      xTaskCreatePinnedToCore(
-        &AudioHelper::jump,
-        "JumpTask", 
-        10240,
-        NULL,
-        1, 
-        NULL,
-        0 
-      );
-    }
-  }  
+  }
+
+  return canJump;
 }
 
 void Mario::idle() {
@@ -70,8 +59,6 @@ void Mario::init() {
 }
 
 void Mario::update() {
-  
-
   if (_state == IDLE && _state != _lastState) {
     Locator::getDisplay()->drawRGBBitmap(_x, _y, MARIO_IDLE, MARIO_IDLE_SIZE[0], MARIO_IDLE_SIZE[1]);
   } else if (_state == JUMPING) {
