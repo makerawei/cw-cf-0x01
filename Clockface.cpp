@@ -2,7 +2,7 @@
 #include "Clockface.h"
 
 EventBus eventBus;
-
+SemaphoreHandle_t Clockface::_semaphore = NULL;
 const char* FORMAT_TWO_DIGITS = "%02d";
 
 // Graphical elements
@@ -22,13 +22,15 @@ unsigned long lastMillis = 0;
 
 Clockface::Clockface(Adafruit_GFX* display) {
   _display = display;
-
+  
+  _alarmIndex = -1;
   Locator::provide(display);
   Locator::provide(&eventBus);
 }
 
 void Clockface::setup(CWDateTime *dateTime) {
   _dateTime = dateTime;
+  _semaphore = xSemaphoreCreateBinary();
 
   Locator::getDisplay()->setFont(&Super_Mario_Bros__24pt7b);
   Locator::getDisplay()->fillRect(0, 0, 64, 64, SKY_COLOR);
@@ -57,7 +59,11 @@ void Clockface::update() {
     mario.jump();
     updateTime();
     lastMillis = millis();
-
+    const int _alarmIndex = _dateTime->checkAlarm();
+    if(_alarmIndex >= 0) {
+      this->_alarmIndex = _alarmIndex;
+      alarmStarts();
+    }
     //Serial.println(_dateTime->getFormattedTime());
   }
 }
@@ -67,11 +73,118 @@ void Clockface::updateTime() {
   minuteBlock.setText(String(_dateTime->getMinute(FORMAT_TWO_DIGITS)));
 }
 
-bool Clockface::externalEvent(int type) {
-  if (type == 0) {  //TODO create an enum
-    updateTime();
-    return mario.jump();
+void Clockface::jumpSoundTask(void *args) {
+  String url = AUDIO_MARIO_EAT_ICON;
+  while(true) {
+    vTaskDelay(pdMS_TO_TICKS(200)); //等待200ms后马里奥跳跃可顶到砖块
+    AudioHelper::getInstance()->play(url);
+    break;
+  }
+  vTaskDelete(NULL);
+}
+
+void Clockface::alarmTask(void *pvParams) {
+  String url = AUDIO_MARIO_START;
+  TickType_t xLastWakeTime = xTaskGetTickCount();
+  while(true) {
+    AudioHelper::getInstance()->play(url);
+    TickType_t xCurrentTime = xTaskGetTickCount();
+    TickType_t elapsedTicks = xCurrentTime - xLastWakeTime;
+    uint32_t elapsedMs = elapsedTicks * portTICK_PERIOD_MS;
+    if(elapsedMs >= MAX_ALARM_DURATION_MS) {
+      break;
+    } else {
+      uint32_t notificationValue;
+      if(xTaskNotifyWait(0, ULONG_MAX, &notificationValue, pdMS_TO_TICKS(10)) == pdTRUE) {
+        if(notificationValue == 1) {
+          Serial.println("recved cancel alarm task notify");
+          break;
+        }
+      }
+    }
   }
 
+  xSemaphoreGive(_semaphore);
+  Clockface *self = (Clockface *)pvParams;
+  if(self) {
+    Serial.println("set _xAlarmTaskHandle as NULL");
+    self->_alarmIndex = -1;
+  }
+
+  vTaskDelete(NULL);
+}
+
+bool Clockface::externalEvent(int type) {
+  if (type == 0) {  //TODO create an enum
+    if(mario.jump()) {
+      tryToCancelAlarmTask();
+      xTaskCreatePinnedToCore(
+        &Clockface::jumpSoundTask,
+        "JumpSoundTask", 
+        10240,
+        NULL,
+        1, 
+        NULL,
+        0 
+      );
+    }
+  }
   return false;
+}
+
+void Clockface::alarmTimerCallback(TimerHandle_t xTimer) {
+  Clockface *self = (Clockface *)pvTimerGetTimerID(xTimer);
+  if(self) {
+    Serial.printf("stop alarm[%d] in timer callback\n", self->_alarmIndex);
+    self->tryToCancelAlarmTask();
+  }
+}
+
+bool Clockface::isAlarmTaskRunning() {
+  // if(_xAlarmTaskHandle == NULL) {
+  //   return false;
+  // }
+  // return xTaskGetHandle(pcTaskGetName(_xAlarmTaskHandle)) != NULL;
+  return _alarmIndex >= 0;
+}
+
+void Clockface::tryToCancelAlarmTask() {
+  if(isAlarmTaskRunning()) {
+    _alarmIndex = -1;
+    Serial.println("===> cancel alarm task");
+    _dateTime->resetAlarm(_alarmIndex);
+    AudioHelper::getInstance()->setStopFlag(true);
+    xTaskNotify(_xAlarmTaskHandle, 1, eSetValueWithOverwrite);
+    if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(2000)) == pdTRUE) {
+      Serial.println("alarm xSemaphoreTake done");
+      AudioHelper::getInstance()->emergencyMute();
+    }
+  }
+}
+
+bool Clockface::alarmStarts() {
+  TimerHandle_t alarmTimer;
+  alarmTimer = xTimerCreate(
+    "alarmTimer",
+    pdMS_TO_TICKS(60 * 1000),
+    pdFALSE,
+    (void *)this,
+    alarmTimerCallback
+  );
+  if(alarmTimer == NULL) {
+    Serial.println("alarm starts error: unable to create alarm timer!");
+    return false;
+  }
+  xTimerStart(alarmTimer, 0);
+  _xAlarmTaskHandle = NULL;
+  xTaskCreatePinnedToCore(
+    &Clockface::alarmTask,
+    "alarmTask", 
+    10240,
+    (void *)this,
+    1, 
+    &_xAlarmTaskHandle,
+    0 
+  );
+  return _xAlarmTaskHandle != NULL;
 }
