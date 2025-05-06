@@ -22,7 +22,7 @@ unsigned long lastMillis = 0;
 
 Clockface::Clockface(Adafruit_GFX* display) {
   _display = display;
-  
+  _alarmTimer = NULL;
   _alarmIndex = -1;
   Locator::provide(display);
   Locator::provide(&eventBus);
@@ -54,7 +54,6 @@ void Clockface::update() {
   hourBlock.update();
   minuteBlock.update();
   mario.update();
-
   if (_dateTime->getSecond() == 0 && millis() - lastMillis > 1000) {
     mario.jump();
     updateTime();
@@ -64,6 +63,7 @@ void Clockface::update() {
       this->_alarmIndex = _alarmIndex;
       alarmStarts();
     }
+    Serial.println("check alarm success");
     //Serial.println(_dateTime->getFormattedTime());
   }
 }
@@ -87,6 +87,7 @@ void Clockface::alarmTask(void *pvParams) {
   String url = AUDIO_MARIO_START;
   TickType_t xLastWakeTime = xTaskGetTickCount();
   while(true) {
+    vTaskDelay(pdMS_TO_TICKS(100));
     AudioHelper::getInstance()->play(url);
     TickType_t xCurrentTime = xTaskGetTickCount();
     TickType_t elapsedTicks = xCurrentTime - xLastWakeTime;
@@ -115,9 +116,9 @@ void Clockface::alarmTask(void *pvParams) {
 }
 
 bool Clockface::externalEvent(int type) {
+  tryToCancelAlarmTask();
   if (type == 0) {  //TODO create an enum
     if(mario.jump()) {
-      tryToCancelAlarmTask();
       xTaskCreatePinnedToCore(
         &Clockface::jumpSoundTask,
         "JumpSoundTask", 
@@ -133,10 +134,23 @@ bool Clockface::externalEvent(int type) {
 }
 
 void Clockface::alarmTimerCallback(TimerHandle_t xTimer) {
-  Clockface *self = (Clockface *)pvTimerGetTimerID(xTimer);
-  if(self && self->isAlarmTaskRunning()) {
-    Serial.printf("stop alarm[%d] in timer callback\n", self->_alarmIndex);
-    self->tryToCancelAlarmTask();
+  static int count = 0;
+  Serial.println("alarmTimerCallback run");
+  if(++count < 40) {
+    mario.jump();
+  } else {
+    Serial.printf("stop alarm timer, count is %d\n", count);
+    count = 0;
+    Clockface *self = (Clockface *)pvTimerGetTimerID(xTimer);
+    if(self) {
+      if(self->_alarmTimer) {
+        if(xTimerDelete(self->_alarmTimer, pdMS_TO_TICKS(100)) == pdPASS) {
+          self->_alarmTimer = NULL;
+        }
+      }
+      Serial.printf("stop alarm[%d] in timer callback\n", self->_alarmIndex);
+      self->tryToCancelAlarmTask();
+    }
   }
 }
 
@@ -149,28 +163,36 @@ bool Clockface::isAlarmTaskRunning() {
 }
 
 void Clockface::tryToCancelAlarmTask() {
+  Serial.println("try to cancel alarm task");
   if(isAlarmTaskRunning()) {
+    Serial.println("alarm task is running, cancel it");
     if(_alarmTimer != NULL) {
-      xTimerDelete(_alarmTimer, portMAX_DELAY);
-      _alarmTimer = NULL;
+      if(xTimerDelete(_alarmTimer, pdMS_TO_TICKS(100)) == pdPASS) {
+        _alarmTimer = NULL;
+      }
     }
     _alarmIndex = -1;
     Serial.println("===> cancel alarm task");
     _dateTime->resetAlarm(_alarmIndex);
     AudioHelper::getInstance()->setStopFlag(true);
     xTaskNotify(_xAlarmTaskHandle, 1, eSetValueWithOverwrite);
-    if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(2000)) == pdTRUE) {
+    if(xSemaphoreTake(_semaphore, pdMS_TO_TICKS(1000)) == pdTRUE) {
       Serial.println("alarm xSemaphoreTake done");
-      AudioHelper::getInstance()->emergencyMute();
     }
+  } else {
+    Serial.println("alarm task is not running, just ignore");
   }
 }
 
 bool Clockface::alarmStarts() {
+  if(_alarmTimer) {
+    Serial.println("alarm already started");
+    return true;
+  }
   _alarmTimer = xTimerCreate(
     "alarmTimer",
-    pdMS_TO_TICKS(60 * 1000),
-    pdFALSE,
+    pdMS_TO_TICKS(1500),
+    pdTRUE,
     (void *)this,
     alarmTimerCallback
   );
@@ -178,16 +200,15 @@ bool Clockface::alarmStarts() {
     Serial.println("alarm starts error: unable to create alarm timer!");
     return false;
   }
-  xTimerStart(_alarmTimer, 0);
-  _xAlarmTaskHandle = NULL;
+  xTimerStart(_alarmTimer, pdMS_TO_TICKS(200));
   xTaskCreatePinnedToCore(
     &Clockface::alarmTask,
     "alarmTask", 
     10240,
     (void *)this,
-    1, 
+    2, 
     &_xAlarmTaskHandle,
-    0 
+    1 
   );
   return _xAlarmTaskHandle != NULL;
 }
