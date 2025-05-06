@@ -24,7 +24,8 @@ class Clockface: public IClockface {
     Adafruit_GFX* _display;
     CWDateTime* _dateTime;
     volatile int _alarmIndex; // 当前触发闹钟的索引
-    TaskHandle_t _xAlarmTaskHandle = NULL;
+    TaskHandle_t _xAlarmTaskHandle;    
+    TimerHandle_t _alarmTimer;
     static SemaphoreHandle_t _semaphore;
     void updateTime();
 

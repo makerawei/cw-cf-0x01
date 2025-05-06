@@ -134,7 +134,7 @@ bool Clockface::externalEvent(int type) {
 
 void Clockface::alarmTimerCallback(TimerHandle_t xTimer) {
   Clockface *self = (Clockface *)pvTimerGetTimerID(xTimer);
-  if(self) {
+  if(self && self->isAlarmTaskRunning()) {
     Serial.printf("stop alarm[%d] in timer callback\n", self->_alarmIndex);
     self->tryToCancelAlarmTask();
   }
@@ -150,6 +150,10 @@ bool Clockface::isAlarmTaskRunning() {
 
 void Clockface::tryToCancelAlarmTask() {
   if(isAlarmTaskRunning()) {
+    if(_alarmTimer != NULL) {
+      xTimerDelete(_alarmTimer, portMAX_DELAY);
+      _alarmTimer = NULL;
+    }
     _alarmIndex = -1;
     Serial.println("===> cancel alarm task");
     _dateTime->resetAlarm(_alarmIndex);
@@ -163,19 +167,18 @@ void Clockface::tryToCancelAlarmTask() {
 }
 
 bool Clockface::alarmStarts() {
-  TimerHandle_t alarmTimer;
-  alarmTimer = xTimerCreate(
+  _alarmTimer = xTimerCreate(
     "alarmTimer",
     pdMS_TO_TICKS(60 * 1000),
     pdFALSE,
     (void *)this,
     alarmTimerCallback
   );
-  if(alarmTimer == NULL) {
+  if(_alarmTimer == NULL) {
     Serial.println("alarm starts error: unable to create alarm timer!");
     return false;
   }
-  xTimerStart(alarmTimer, 0);
+  xTimerStart(_alarmTimer, 0);
   _xAlarmTaskHandle = NULL;
   xTaskCreatePinnedToCore(
     &Clockface::alarmTask,
