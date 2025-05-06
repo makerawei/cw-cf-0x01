@@ -134,23 +134,21 @@ bool Clockface::externalEvent(int type) {
 }
 
 void Clockface::alarmTimerCallback(TimerHandle_t xTimer) {
-  static int count = 0;
-  Serial.println("alarmTimerCallback run");
-  if(++count < 40) {
+  Clockface *self = (Clockface *)pvTimerGetTimerID(xTimer);
+  TickType_t xCurrentTime = xTaskGetTickCount();
+  TickType_t elapsedTicks = xCurrentTime - self->_xLastAlarmTime;
+  uint32_t elapsedMs = elapsedTicks * portTICK_PERIOD_MS;
+  if(elapsedMs < MAX_ALARM_DURATION_MS) {
     mario.jump();
   } else {
-    Serial.printf("stop alarm timer, count is %d\n", count);
-    count = 0;
-    Clockface *self = (Clockface *)pvTimerGetTimerID(xTimer);
-    if(self) {
-      if(self->_alarmTimer) {
-        if(xTimerDelete(self->_alarmTimer, pdMS_TO_TICKS(100)) == pdPASS) {
-          self->_alarmTimer = NULL;
-        }
+    Serial.println("stop alarm timer");
+    if(self->_alarmTimer) {
+      if(xTimerDelete(self->_alarmTimer, pdMS_TO_TICKS(100)) == pdPASS) {
+        self->_alarmTimer = NULL;
       }
-      Serial.printf("stop alarm[%d] in timer callback\n", self->_alarmIndex);
-      self->tryToCancelAlarmTask();
     }
+    Serial.printf("stop alarm[%d] in timer callback\n", self->_alarmIndex);
+    self->tryToCancelAlarmTask();
   }
 }
 
@@ -200,13 +198,15 @@ bool Clockface::alarmStarts() {
     Serial.println("alarm starts error: unable to create alarm timer!");
     return false;
   }
-  xTimerStart(_alarmTimer, pdMS_TO_TICKS(200));
+  _xLastAlarmTime = xTaskGetTickCount();
+  xTimerStart(_alarmTimer, pdMS_TO_TICKS(100));
+  
   xTaskCreatePinnedToCore(
     &Clockface::alarmTask,
     "alarmTask", 
     10240,
     (void *)this,
-    2, 
+    1, 
     &_xAlarmTaskHandle,
     1 
   );

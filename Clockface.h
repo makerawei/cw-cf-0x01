@@ -26,6 +26,7 @@ class Clockface: public IClockface {
     int _alarmIndex; // 当前触发闹钟的索引
     TaskHandle_t _xAlarmTaskHandle;    
     TimerHandle_t _alarmTimer;
+    TickType_t _xLastAlarmTime;
     static SemaphoreHandle_t _semaphore;
     void updateTime();
 
