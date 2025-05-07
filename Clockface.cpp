@@ -55,7 +55,9 @@ void Clockface::update() {
   minuteBlock.update();
   mario.update();
   if (_dateTime->getSecond() == 0 && millis() - lastMillis > 1000) {
-    mario.jump();
+    if(!isAlarmTaskRunning()) {
+      mario.jump();
+    }
     updateTime();
     lastMillis = millis();
     const int _alarmIndex = _dateTime->checkAlarm();
