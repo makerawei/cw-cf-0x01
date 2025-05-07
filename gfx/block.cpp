@@ -97,16 +97,16 @@ void Block::update() {
 
 
 void Block::execute(EventType event, Sprite* caller) {
-  //Serial.println("Checking collision");
-
+  // Serial.printf("block Checking collision by eventType %d\n", event);
   if (event == EventType::MOVE) {
     if (this->collidedWith(caller)) {
       Serial.println("Collision detected");
       hit();
       Locator::getEventBus()->broadcast(EventType::COLLISION, this);
     }
+  } else if(event == EventType::COLLISION) {
+    hit();
   }
-  
 }
 
 

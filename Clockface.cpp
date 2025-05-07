@@ -141,7 +141,8 @@ void Clockface::alarmTimerCallback(TimerHandle_t xTimer) {
   TickType_t elapsedTicks = xCurrentTime - self->_xLastAlarmTime;
   uint32_t elapsedMs = elapsedTicks * portTICK_PERIOD_MS;
   if(elapsedMs < MAX_ALARM_DURATION_MS) {
-    mario.jump();
+    // mario.jump();
+    Locator::getEventBus()->broadcast(COLLISION, &mario);
   } else {
     Serial.println("stop alarm timer");
     if(self->_alarmTimer) {
@@ -191,7 +192,7 @@ bool Clockface::alarmStarts() {
   }
   _alarmTimer = xTimerCreate(
     "alarmTimer",
-    pdMS_TO_TICKS(1500),
+    pdMS_TO_TICKS(1000),
     pdTRUE,
     (void *)this,
     alarmTimerCallback
