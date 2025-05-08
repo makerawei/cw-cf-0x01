@@ -71,6 +71,7 @@ void Clockface::update() {
 }
 
 void Clockface::updateTime() {
+  _dateTime->updateNTP();
   hourBlock.setText(String(_dateTime->getHour()));
   minuteBlock.setText(String(_dateTime->getMinute(FORMAT_TWO_DIGITS)));
 }
