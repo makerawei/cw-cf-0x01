@@ -27,7 +27,6 @@ void Clockface::alarmTickCallback() {
 
 void Clockface::setup(CWDateTime *dateTime) {
   _dateTime = dateTime;
-  _semaphore = xSemaphoreCreateBinary();
 
   Locator::getDisplay()->setFont(&Super_Mario_Bros__24pt7b);
   Locator::getDisplay()->fillRect(0, 0, 64, 64, SKY_COLOR);
