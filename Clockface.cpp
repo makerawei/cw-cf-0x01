@@ -57,11 +57,6 @@ void Clockface::update() {
     }
     updateTime();
     lastMillis = millis();
-    const int _alarmIndex = _dateTime->checkAlarm();
-    if(_alarmIndex >= 0) {
-      this->_alarmIndex = _alarmIndex;
-      alarmStarts();
-    }
   }
 }
 
